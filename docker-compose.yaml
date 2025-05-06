@@ -1,0 +1,67 @@
+name: passbolt
+services:
+  server:
+    image: passbolt/passbolt:latest-ce
+    container_name: passbolt
+    hostname: passbolt
+    restart: always
+    pull_policy: always
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - /bin/bash
+      - -c
+      - /usr/bin/wait-for.sh -t 0 db:3306 -- /docker-entrypoint.sh
+    environment:
+      DEBUG: false
+      APP_FULL_BASE_URL: ${BASE_HOST_NAME:passbolt.$HOSTNAMR}
+      DATASOURCES_DEFAULT_HOST: passbolt-db
+      DATASOURCES_DEFAULT_USERNAME: passboltuser
+      DATASOURCES_DEFAULT_PASSWORD: passboltpass
+      DATASOURCES_DEFAULT_DATABASE: passbolt
+      PASSBOLT_REGISTRATION_PUBLIC: true
+      EMAIL_TRANSPORT_DEFAULT_TLS: true
+      EMAIL_DEFAULT_FROM: ${}
+      EMAIL_TRANSPORT_DEFAULT_HOST: ${}
+      EMAIL_TRANSPORT_DEFAULT_PORT: ${}
+      EMAIL_TRANSPORT_DEFAULT_USERNAME: ${}
+      EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${}
+    ports:
+      - 127.0.0.1:60025:8080
+    volumes:
+      - /var/lib/srv/$USER/docker/bluesky-social/pds/latest/rootfs/gpg:/etc/passbolt/gpg:rw
+      - /var/lib/srv/$USER/docker/bluesky-social/pds/latest/rootfs/jwt:/etc/passbolt/jwt:rw
+    depends_on:
+      db:
+        condition: service_started
+    healthcheck:
+      test: curl -f http://localhost:8080/ || exit 1
+    networks:
+      - passbolt
+
+  db:
+    image: mariadb:11.3-jammy
+    container_name: passbolt-db
+    hostname: passbolt-db
+    restart: always
+    pull_policy: always
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 768
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: America/New_York
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: passbolt
+      MYSQL_USER: passboltuser
+      MYSQL_PASSWORD: passboltpass
+    volumes:
+      - /var/lib/srv/$USER/docker/bluesky-social/pds/latest/rootfs/data/db/mariadb:/var/lib/mysql:rw
+    networks:
+      - passbolt
+
+networks:
+  passbolt:
+    name: passbolt
+    external: false
