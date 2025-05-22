@@ -1,0 +1,79 @@
+# nginx proxy address - http://172.17.0.1:60236
+
+name: passbolt
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: passbolt/passbolt:latest-ce
+    container_name: passbolt
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    command: /bin/bash -c '/usr/bin/wait-for.sh -t 0 passbolt-db:3306 -- /docker-entrypoint.sh'
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      DEBUG: false
+      PASSBOLT_REGISTRATION_PUBLIC: true
+      APP_FULL_BASE_URL: ${BASE_HOST_NAME:-$HOSTNAME}
+      DATASOURCES_DEFAULT_HOST: passbolt-db
+      DATASOURCES_DEFAULT_DATABASE: passbolt
+      DATASOURCES_DEFAULT_USERNAME: passboltuser
+      DATASOURCES_DEFAULT_PASSWORD: Gv3yPFuKmh11p2CfKBJI2J0YQghFv6kh
+      EMAIL_TRANSPORT_DEFAULT_TLS: true
+      EMAIL_TRANSPORT_DEFAULT_PORT: ${EMAIL_SERVER_PORT:-25}
+      EMAIL_TRANSPORT_DEFAULT_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      EMAIL_TRANSPORT_DEFAULT_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
+      EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
+      EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@${BASE_HOST_NAME:-$HOSTNAME}}
+    ports:
+      - '172.17.0.1::60025:8080'
+    volumes:
+      - /var/lib/srv/$USER/docker/passbolt/passbolt/latest-ce/rootfs/data/passbolt/gpg:/etc/passbolt/gpg
+      - /var/lib/srv/$USER/docker/passbolt/passbolt/latest-ce/rootfs/data/passbolt/jwt:/etc/passbolt/jwt
+    depends_on:
+      db:
+        condition: service_started
+    healthcheck:
+      test: curl -q -LSsf http://localhost:8080/ || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - passbolt
+
+  db:
+    image: mariadb:11.3-jammy
+    container_name: passbolt-db
+    hostname: passbolt-db
+    restart: always
+    pull_policy: always
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpu_shares: 768
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      MYSQL_DATABASE: passbolt
+      MYSQL_USER: passboltuser
+      MYSQL_PASSWORD: Gv3yPFuKmh11p2CfKBJI2J0YQghFv6kh
+      MYSQL_ROOT_PASSWORD: Gv3yPFuKmh11p2CfKBJI2J0YQghFv6kh
+    volumes:
+      - /var/lib/srv/$USER/db/mariadb/passbolt:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-u', 'root', '--password=Gv3yPFuKmh11p2CfKBJI2J0YQghFv6kh']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - passbolt
+
+networks:
+  passbolt:
+    name: passbolt
+    external: false
