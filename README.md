@@ -56,9 +56,9 @@ See `docker-compose.yaml` for complete list of configurable options.
 
 ## 📂 Volumes
 
-- `./rootfs/data/passbolt/gpg` - Data storage
-- `./rootfs/data/passbolt/jwt` - Data storage
-- `./rootfs/data/db/mariadb/passbolt` - Data storage
+- `./volumes/data/passbolt/gpg` - Data storage
+- `./volumes/data/passbolt/jwt` - Data storage
+- `./volumes/data/db/mariadb/passbolt` - Data storage
 
 ## 🔐 Security
 
