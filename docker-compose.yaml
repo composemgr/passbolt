@@ -1,4 +1,4 @@
-# nginx proxy address - http://172.17.0.1:60236
+# nginx proxy address - http://172.17.0.1:60025
 
 name: passbolt
 x-logging: &default-logging
@@ -31,6 +31,8 @@ services:
       EMAIL_TRANSPORT_DEFAULT_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
       EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
       EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@example.com}
+      CONTAINER_NAME: passbolt-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     ports:
       - '172.17.0.1:60025:8080'
     volumes:
@@ -46,6 +48,24 @@ services:
       retries: 5
     networks:
       - passbolt
+      - proxy
+      - cloudflare
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://passbolt-app:8080'
+      - 'cloudflare.hostname=passbolt.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.passbolt-app.entrypoints=http'
+      - 'traefik.http.routers.passbolt-app-secure.tls=true'
+      - 'traefik.http.routers.passbolt-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.passbolt-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.passbolt-app.middlewares=passbolt-app-https-redirect'
+      - 'traefik.http.routers.passbolt-app-secure.entrypoints=https'
+      - 'traefik.http.routers.passbolt-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.passbolt-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.passbolt-app-secure.service=passbolt-app'
+      - 'traefik.http.services.passbolt-app.loadbalancer.server.port=8080'
 
   db:
     image: mariadb:latest
@@ -63,6 +83,7 @@ services:
       MYSQL_USER: ${DB_USER_NAME:-passboltuser}
       MYSQL_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
       MYSQL_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_admin_password}
+      CONTAINER_NAME: passbolt-db
     volumes:
       - './volumes/data/db/mariadb/passbolt:/var/lib/mysql'
     healthcheck:
@@ -85,3 +106,7 @@ networks:
   passbolt:
     name: passbolt
     external: false
+  proxy:
+    external: true
+  cloudflare:
+    external: true
