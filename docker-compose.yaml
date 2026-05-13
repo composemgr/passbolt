@@ -20,7 +20,7 @@ services:
       TZ: ${TZ:-America/New_York}
       DEBUG: false
       PASSBOLT_REGISTRATION_PUBLIC: true
-      APP_FULL_BASE_URL: ${BASE_HOST_NAME:-$HOSTNAME}
+      APP_FULL_BASE_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
       DATASOURCES_DEFAULT_HOST: passbolt-db
       DATASOURCES_DEFAULT_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
       DATASOURCES_DEFAULT_USERNAME: ${DB_USER_NAME:-passboltuser}
@@ -30,7 +30,7 @@ services:
       EMAIL_TRANSPORT_DEFAULT_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
       EMAIL_TRANSPORT_DEFAULT_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
       EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
-      EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@${BASE_DOMAIN_NAME:-${BASE_HOST_NAME}}}
+      EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@example.com}
     ports:
       - '172.17.0.1:60025:8080'
     volumes:
@@ -48,7 +48,7 @@ services:
       - passbolt
 
   db:
-    image: mariadb:11.3-jammy
+    image: mariadb:latest
     container_name: passbolt-db
     hostname: passbolt-db
     restart: always
