@@ -20,6 +20,7 @@ services:
       TZ: ${TZ:-America/New_York}
       DEBUG: false
       PASSBOLT_REGISTRATION_PUBLIC: true
+      PASSBOLT_SSL_FORCE: false
       APP_FULL_BASE_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
       DATASOURCES_DEFAULT_HOST: passbolt-db
       DATASOURCES_DEFAULT_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
