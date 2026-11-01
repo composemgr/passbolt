@@ -1,4 +1,4 @@
-# nginx proxy address - http://172.17.0.1:60025
+# nginx proxy address - http://172.17.0.1:64294
 
 name: passbolt
 x-logging: &default-logging
@@ -8,65 +8,48 @@ x-logging: &default-logging
   driver: json-file
 
 services:
-  app:
+  server:
     image: passbolt/passbolt:latest-ce
-    container_name: passbolt-app
+    container_name: passbolt-server
+    domainname: ${BASE_DOMAIN_NAME:-example.com}
     hostname: ${BASE_HOST_NAME:-$HOSTNAME}
     restart: always
     pull_policy: always
-    command: /bin/bash -c '/usr/bin/wait-for.sh -t 0 passbolt-db:3306 -- /docker-entrypoint.sh'
     logging: *default-logging
     environment:
       TZ: ${TZ:-America/New_York}
-      DEBUG: false
-      PASSBOLT_REGISTRATION_PUBLIC: true
-      PASSBOLT_SSL_FORCE: false
+      CONTAINER_NAME: passbolt-server
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
       APP_FULL_BASE_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      PASSBOLT_SSL_FORCE: "false"
+      PASSBOLT_REGISTRATION_PUBLIC: "true"
+      # Database
       DATASOURCES_DEFAULT_HOST: passbolt-db
       DATASOURCES_DEFAULT_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
       DATASOURCES_DEFAULT_USERNAME: ${DB_USER_NAME:-passboltuser}
       DATASOURCES_DEFAULT_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-      EMAIL_TRANSPORT_DEFAULT_TLS: true
-      EMAIL_TRANSPORT_DEFAULT_PORT: ${EMAIL_SERVER_PORT:-587}
+      # Email
+      EMAIL_TRANSPORT_DEFAULT_TLS: "true"
       EMAIL_TRANSPORT_DEFAULT_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      EMAIL_TRANSPORT_DEFAULT_PORT: ${EMAIL_SERVER_PORT:-587}
       EMAIL_TRANSPORT_DEFAULT_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
       EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
       EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@example.com}
-      CONTAINER_NAME: passbolt-app
-      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     ports:
-      - '172.17.0.1:60025:8080'
+      - '172.17.0.1:64294:80'
     volumes:
-      - './volumes/data/passbolt/gpg:/etc/passbolt/gpg'
-      - './volumes/data/passbolt/jwt:/etc/passbolt/jwt'
+      - './volumes/config/passbolt/gpg:/etc/passbolt/gpg'
+      - './volumes/config/passbolt/jwt:/etc/passbolt/jwt'
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
-      test: curl -q -LSsf http://localhost:8080/ || exit 1
+      test: ['CMD-SHELL', 'curl -q -LSsf http://localhost:80/ || exit 1']
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - passbolt
-      - proxy
-      - cloudflare
-    labels:
-      - 'traefik.enable=true'
-      - 'cloudflare.enable=true'
-      - 'traefik.docker.network=proxy'
-      - 'cloudflare.service=http://passbolt-app:8080'
-      - 'cloudflare.hostname=passbolt.${CLOUDFLARE_ZONE_NAME:-}'
-      - 'traefik.http.routers.passbolt-app.entrypoints=http'
-      - 'traefik.http.routers.passbolt-app-secure.tls=true'
-      - 'traefik.http.routers.passbolt-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.middlewares.passbolt-app-https-redirect.redirectscheme.scheme=https'
-      - 'traefik.http.routers.passbolt-app.middlewares=passbolt-app-https-redirect'
-      - 'traefik.http.routers.passbolt-app-secure.entrypoints=https'
-      - 'traefik.http.routers.passbolt-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
-      - 'traefik.http.routers.passbolt-app-secure.tls.certresolver=cloudflare'
-      - 'traefik.http.routers.passbolt-app-secure.service=passbolt-app'
-      - 'traefik.http.services.passbolt-app.loadbalancer.server.port=8080'
 
   db:
     image: mariadb:latest
@@ -74,32 +57,23 @@ services:
     hostname: passbolt-db
     restart: always
     pull_policy: always
-    mem_limit: 512m
-    mem_reservation: 128m
-    cpu_shares: 768
     logging: *default-logging
     environment:
       TZ: ${TZ:-America/New_York}
-      MYSQL_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
-      MYSQL_USER: ${DB_USER_NAME:-passboltuser}
-      MYSQL_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
-      MYSQL_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_admin_password}
       CONTAINER_NAME: passbolt-db
+      MARIADB_AUTO_UPGRADE: "1"
+      MARIADB_INIT_SKIP_TZINFO: "1"
+      MARIADB_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
+      MARIADB_USER: ${DB_USER_NAME:-passboltuser}
+      MARIADB_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      MARIADB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_admin_password}
     volumes:
-      - './volumes/data/db/mariadb/passbolt:/var/lib/mysql'
+      - './volumes/db/mariadb/passbolt:/var/lib/mysql:z'
     healthcheck:
-      test:
-        [
-          'CMD',
-          'mysqladmin',
-          'ping',
-          '-u',
-          'root',
-          '--password=${DB_ADMIN_PASS:-changeme_admin_password}',
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - passbolt
 
@@ -107,7 +81,3 @@ networks:
   passbolt:
     name: passbolt
     external: false
-  proxy:
-    external: true
-  cloudflare:
-    external: true

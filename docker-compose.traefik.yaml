@@ -1,0 +1,94 @@
+name: passbolt
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: passbolt/passbolt:latest-ce
+    container_name: passbolt-server
+    domainname: ${BASE_DOMAIN_NAME:-example.com}
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: passbolt-server
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      APP_FULL_BASE_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      PASSBOLT_SSL_FORCE: "false"
+      PASSBOLT_REGISTRATION_PUBLIC: "true"
+      # Database
+      DATASOURCES_DEFAULT_HOST: passbolt-db
+      DATASOURCES_DEFAULT_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
+      DATASOURCES_DEFAULT_USERNAME: ${DB_USER_NAME:-passboltuser}
+      DATASOURCES_DEFAULT_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      # Email
+      EMAIL_TRANSPORT_DEFAULT_TLS: "true"
+      EMAIL_TRANSPORT_DEFAULT_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      EMAIL_TRANSPORT_DEFAULT_PORT: ${EMAIL_SERVER_PORT:-587}
+      EMAIL_TRANSPORT_DEFAULT_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
+      EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
+      EMAIL_DEFAULT_FROM: ${EMAIL_SERVER_MAIL_FROM:-no-reply@example.com}
+    volumes:
+      - './volumes/config/passbolt/gpg:/etc/passbolt/gpg'
+      - './volumes/config/passbolt/jwt:/etc/passbolt/jwt'
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -q -LSsf http://localhost:80/ || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.passbolt-server.entrypoints=http'
+      - 'traefik.http.routers.passbolt-server.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.passbolt-server.middlewares=passbolt-server-https-redirect'
+      - 'traefik.http.middlewares.passbolt-server-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.passbolt-server-secure.entrypoints=https'
+      - 'traefik.http.routers.passbolt-server-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.passbolt-server-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.passbolt-server-secure.service=passbolt-server'
+      - 'traefik.http.services.passbolt-server.loadbalancer.server.port=80'
+    networks:
+      - passbolt
+      - traefik
+
+  db:
+    image: mariadb:latest
+    container_name: passbolt-db
+    hostname: passbolt-db
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: passbolt-db
+      MARIADB_AUTO_UPGRADE: "1"
+      MARIADB_INIT_SKIP_TZINFO: "1"
+      MARIADB_DATABASE: ${DB_CREATE_DATABASE_NAME:-passbolt}
+      MARIADB_USER: ${DB_USER_NAME:-passboltuser}
+      MARIADB_PASSWORD: ${DB_USER_PASS:-changeme_db_password}
+      MARIADB_ROOT_PASSWORD: ${DB_ADMIN_PASS:-changeme_admin_password}
+    volumes:
+      - './volumes/db/mariadb/passbolt:/var/lib/mysql:z'
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - passbolt
+
+networks:
+  passbolt:
+    name: passbolt
+    external: false
+  traefik:
+    external: true
